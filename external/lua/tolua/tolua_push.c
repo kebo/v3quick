@@ -14,6 +14,7 @@
 
 #include "tolua++.h"
 #include "lauxlib.h"
+#include "tolua_fix.h"
 
 #include <stdlib.h>
 
@@ -37,7 +38,8 @@ void tolua_pushusertype_internal (lua_State* L, void* value, const char* type, i
         };
         
         lua_pushlightuserdata(L,value);                             /* stack: mt ubox key<value> */
-        lua_rawget(L,-2);                                           /* stack: mt ubox ubox[value] */
+//        lua_rawget(L,-2);                                           /* stack: mt ubox ubox[value] */
+        toluafix_get_userdata(L, -2);
         
         if (lua_isnil(L,-1))
         {
@@ -46,7 +48,8 @@ void tolua_pushusertype_internal (lua_State* L, void* value, const char* type, i
             *(void**)lua_newuserdata(L,sizeof(void *)) = value;     /* stack: mt ubox value newud */
             lua_pushvalue(L,-1);                                    /* stack: mt ubox value newud newud */
             lua_insert(L,-4);                                       /* stack: mt newud ubox value newud */
-            lua_rawset(L,-3);                  /* ubox[value] = newud, stack: mt newud ubox */
+//            lua_rawset(L,-3);                  /* ubox[value] = newud, stack: mt newud ubox */
+            toluafix_set_userdata(L, -3);
             lua_pop(L,1);                                           /* stack: mt newud */
             /*luaL_getmetatable(L,type);*/
             lua_pushvalue(L, -2);                                   /* stack: mt newud mt */

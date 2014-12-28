@@ -132,7 +132,8 @@ TOLUA_API int toluafix_remove_ccobject_by_refid(lua_State* L, int refid)
     tolua_remove_value_from_root(L, ptr);
 
     lua_pushlightuserdata(L, ptr);                                  /* stack: mt ubox ptr */
-    lua_rawget(L,-2);                                               /* stack: mt ubox ud */
+//    lua_rawget(L,-2);                                               /* stack: mt ubox ud */
+    toluafix_get_userdata(L, -2);
     if (lua_isnil(L, -1))
     {
         // Lua object has released (GC), C++ object not in ubox.
@@ -159,7 +160,8 @@ TOLUA_API int toluafix_remove_ccobject_by_refid(lua_State* L, int refid)
 
     lua_pushlightuserdata(L, ptr);                                  /* stack: mt ubox ptr */
     lua_pushnil(L);                                                 /* stack: mt ubox ptr nil */
-    lua_rawset(L, -3);                             /* ubox[ptr] = nil, stack: mt ubox */
+//    lua_rawset(L, -3);                             /* ubox[ptr] = nil, stack: mt ubox */
+    toluafix_set_userdata(L, -3);
 
     lua_pop(L, 2);
     //printf("[LUA] remove CCObject, refid: %d, ptr: %x, type: %s\n", refid, (int)ptr, type);
@@ -255,4 +257,201 @@ TOLUA_API void toluafix_stack_dump(lua_State* L, const char* label)
         }
     }
     printf("\n");
+}
+
+//typedef std::unordered_map<void*, void*> ToluafixCTable;
+//static std::vector<ToluafixCTable *> ctable_list;
+
+class ToluafixCTable
+{
+public:
+    ToluafixCTable()
+    {
+        char s[100];
+        sprintf(s, "tolua_fix_ctable_%p", this);
+        name = s;
+    }
+    
+    int find(void *value)
+    {
+        int i;
+        for (i=0;i<v.size();i++)
+        {
+            if (v.at(i) == value)
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+    
+    
+    void add(void *value)
+    {
+        if (find(value)>=0)
+        {
+            return;
+        }
+        v.push_back(value);
+        auto num = v.size();
+        if (num>max)
+        {
+            max = num;
+        }
+    }
+    
+    void remove(void *value)
+    {
+        for (auto it = v.begin(); it != v.end(); ++it)
+        {
+            auto lt = *it;
+            if (lt == value)
+            {
+                v.erase(it);
+                break;
+            }
+        }
+    }
+    
+    void rebuild(lua_State* L)
+    {
+        auto num = v.size();
+        if ( num>0 && num+100>max )
+        {
+            return;
+        }
+        
+        lua_pushstring(L, name.c_str());                            /* stack: ... string */
+        lua_pushvalue(L, -1);                                       /* stack: ... string string */
+        lua_rawget(L, LUA_REGISTRYINDEX);                           /* stack: ... string ubox */
+        lua_newtable(L);                                            /* stack: ... string ubox newtbl */
+        for (auto it = v.begin(); it != v.end(); ++it)
+        {
+            auto lt = *it;
+            lua_pushlightuserdata(L, lt);   /* stack: ... string ubox newtbl key */
+            lua_pushvalue(L, -1);           /* stack: ... string ubox newtbl key key */
+            lua_rawget(L, -4);              /* stack: ... string ubox newtbl key value */
+            lua_rawset(L, -3);              /* stack: ... string ubox newtbl */
+        }
+        lua_insert(L, -2);              /* stack: ... string newtbl ubox */
+        lua_pop(L, 1);
+        lua_rawset(L, LUA_REGISTRYINDEX);
+    }
+    
+    std::string & getName()
+    {
+        return name;
+    }
+    
+private:
+    std::vector<void*> v;
+    size_t max = 0;
+    std::string name;
+};
+static std::vector<ToluafixCTable *> ctable_list;
+
+static ToluafixCTable* findCtable(void *ctable)
+{
+    ToluafixCTable* table = (ToluafixCTable*)ctable;
+    for (auto it = ctable_list.begin(); it != ctable_list.end(); ++it)
+    {
+        auto lt = *it;
+        if (lt == table)
+        {
+            return lt;
+        }
+    }
+    return nullptr;
+}
+
+TOLUA_API void toluafix_new_ctable(lua_State* L)
+{
+    ToluafixCTable* table = new ToluafixCTable;
+    if (table)
+    {
+        ctable_list.push_back(table);
+        lua_pushlightuserdata(L, table);
+    }
+    else
+    {
+        lua_pushnil(L);
+    }
+}
+
+TOLUA_API void toluafix_get_userdata(lua_State *L, int idx)
+{
+    void *ctable = lua_touserdata(L, idx);
+    ToluafixCTable* table = findCtable(ctable);
+    if (!table)
+    {
+        lua_pop(L, 1);
+        lua_pushnil(L);
+    }
+    
+    void *value = lua_touserdata(L, -1);
+    auto found = table->find(value);
+    if ( found>=0 )
+    {
+        lua_pushstring(L, table->getName().c_str());                        /* stack: ... value string */
+        lua_rawget(L, LUA_REGISTRYINDEX);                           /* stack: ... value ubox */
+        lua_insert(L, -2);
+        lua_rawget(L, -2);
+        lua_insert(L, -2);
+        lua_pop(L, 1);
+    }
+    else
+    {
+        lua_pop(L, 1);
+        lua_pushnil(L);
+    }
+}
+
+TOLUA_API void toluafix_set_userdata(lua_State *L, int idx)
+{
+    void *value = lua_touserdata(L, -2);
+    if (!value)
+    {
+        lua_pop(L, 2);
+        return;
+    }
+    
+    void *ctable = lua_touserdata(L, idx);
+    ToluafixCTable* table = findCtable(ctable);
+    if (!table)
+    {
+        lua_pop(L, 2);
+        return;
+    }
+    
+    bool checkFlag;
+    if (lua_isnil(L, -1))
+    {
+        table->remove(value);
+        checkFlag = true;
+    }
+    else
+    {
+        table->add(value);
+        checkFlag = false;
+    }
+    
+    auto name = table->getName();
+    lua_pushstring(L, name.c_str());                        /* stack: ... value ud string */
+    lua_rawget(L, LUA_REGISTRYINDEX);                           /* stack: ... value ud ubox */
+    if (lua_isnil(L, -1))
+    {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushstring(L, name.c_str());
+        lua_pushvalue(L, -2);
+        lua_rawset(L,LUA_REGISTRYINDEX);
+    }
+    lua_insert(L, -3);
+    lua_rawset(L, -3);
+    lua_pop(L, 1);
+    
+    if (checkFlag)
+    {
+        table->rebuild(L);
+    }
 }

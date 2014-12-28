@@ -15,6 +15,7 @@
 #include "tolua++.h"
 #include "tolua_event.h"
 #include "lauxlib.h"
+#include "tolua_fix.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -108,14 +109,15 @@ static void set_ubox(lua_State* L) {
         /* mt basemt nil */
         lua_pop(L, 1);
         lua_pushstring(L,"tolua_ubox");
-        lua_newtable(L);
-        /* make weak value metatable for ubox table to allow userdata to be
-        garbage-collected */
-        lua_newtable(L);
-        lua_pushliteral(L, "__mode");
-        lua_pushliteral(L, "v");
-        lua_rawset(L, -3);               /* stack: string ubox mt */
-        lua_setmetatable(L, -2);  /* stack:mt basemt string ubox */
+//        lua_newtable(L);
+        toluafix_new_ctable(L);
+//        /* make weak value metatable for ubox table to allow userdata to be
+//        garbage-collected */
+//        lua_newtable(L);
+//        lua_pushliteral(L, "__mode");
+//        lua_pushliteral(L, "v");
+//        lua_rawset(L, -3);               /* stack: string ubox mt */
+//        lua_setmetatable(L, -2);  /* stack:mt basemt string ubox */
         lua_rawset(L,-4);
     };
 
@@ -363,14 +365,15 @@ TOLUA_API void tolua_open (lua_State* L)
 
         /* create object ptr -> udata mapping table */
         lua_pushstring(L,"tolua_ubox");
-        lua_newtable(L);
-        /* make weak value metatable for ubox table to allow userdata to be
-           garbage-collected */
-        lua_newtable(L);
-        lua_pushliteral(L, "__mode");
-        lua_pushliteral(L, "v");
-        lua_rawset(L, -3);               /* stack: string ubox mt */
-        lua_setmetatable(L, -2);  /* stack: string ubox */
+//        lua_newtable(L);
+        toluafix_new_ctable(L);
+//        /* make weak value metatable for ubox table to allow userdata to be
+//           garbage-collected */
+//        lua_newtable(L);
+//        lua_pushliteral(L, "__mode");
+//        lua_pushliteral(L, "v");
+//        lua_rawset(L, -3);               /* stack: string ubox mt */
+//        lua_setmetatable(L, -2);  /* stack: string ubox */
         lua_rawset(L,LUA_REGISTRYINDEX);
         
 //        /* create object ptr -> class type mapping table */

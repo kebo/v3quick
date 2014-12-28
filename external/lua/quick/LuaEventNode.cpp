@@ -416,7 +416,8 @@ static LuaStack * initExecParam(Node *node, int phase)
         lua_rawget(L, LUA_REGISTRYINDEX);                           /* stack: mt func ubox */
     };
     lua_pushlightuserdata(L, node);                                 /* stack: mt func ubox ptr */
-    lua_rawget(L,-2);                                               /* stack: mt func ubox ud */
+//    lua_rawget(L,-2);                                               /* stack: mt func ubox ud */
+    toluafix_get_userdata(L, -2);
     if (lua_isnil(L, -1))
     {
         stack->clean();
